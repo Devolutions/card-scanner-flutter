@@ -3,14 +3,12 @@ package com.nateshmbhat.card_scanner;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
-import android.os.Parcel;
 
 import androidx.annotation.NonNull;
 
 import com.nateshmbhat.card_scanner.scanner_core.models.CardDetails;
 import com.nateshmbhat.card_scanner.scanner_core.models.CardScanOptions;
 
-import java.util.HashMap;
 import java.util.Map;
 
 import io.flutter.embedding.engine.plugins.FlutterPlugin;
@@ -21,12 +19,13 @@ import io.flutter.plugin.common.MethodChannel;
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler;
 import io.flutter.plugin.common.MethodChannel.Result;
 import io.flutter.plugin.common.PluginRegistry;
+import io.flutter.plugin.common.PluginRegistry.ActivityResultListener;
 import io.flutter.plugin.common.PluginRegistry.Registrar;
 
 /**
  * CardScannerPlugin
  */
-public class CardScannerPlugin implements FlutterPlugin, MethodCallHandler, ActivityAware, PluginRegistry.ActivityResultListener {
+public class CardScannerPlugin implements  MethodCallHandler, ActivityResultListener {
     private static final int SCAN_REQUEST_CODE = 49193;
     private Activity activity;
     /// The MethodChannel that will the communication between Flutter and native Android
@@ -36,21 +35,19 @@ public class CardScannerPlugin implements FlutterPlugin, MethodCallHandler, Acti
     public static MethodChannel channel;
 
     public final static String METHOD_CHANNEL_NAME = "nateshmbhat/card_scanner";
-    private Context context;
+    private final PluginRegistry.Registrar registrar;
     private Result pendingResult;
+    private MethodCall methodCall;
 
-
-    @Override
-    public void onAttachedToEngine(@NonNull FlutterPluginBinding flutterPluginBinding) {
-        channel = new MethodChannel(flutterPluginBinding.getBinaryMessenger(), METHOD_CHANNEL_NAME);
-        channel.setMethodCallHandler(this);
-        context = flutterPluginBinding.getApplicationContext();
+    public static void registerWith(Registrar registrar) {
+        final MethodChannel channel = new MethodChannel(registrar.messenger(), METHOD_CHANNEL_NAME);
+        CardScannerPlugin instance = new CardScannerPlugin(registrar);
+        registrar.addActivityResultListener(instance);
+        channel.setMethodCallHandler(instance);
     }
 
-    @Override
-    public void onDetachedFromEngine(@NonNull FlutterPluginBinding binding) {
-        channel.setMethodCallHandler(null);
-        context = null;
+    private CardScannerPlugin(PluginRegistry.Registrar registrar) {
+        this.registrar = registrar;
     }
 
     // This static function is optional and equivalent to onAttachedToEngine. It supports the old
@@ -66,6 +63,7 @@ public class CardScannerPlugin implements FlutterPlugin, MethodCallHandler, Acti
     @Override
     public void onMethodCall(@NonNull MethodCall call, @NonNull Result result) {
         if ("scan_card".equals(call.method)) {
+            this.activity = registrar.activity();
             if (activity == null) {
                 result.error("no_activity", "card_scanner plugin requires a foreground activity.", null);
                 return;
@@ -75,6 +73,7 @@ public class CardScannerPlugin implements FlutterPlugin, MethodCallHandler, Acti
                 return;
             }
             pendingResult = result;
+
             showCameraActivity(call);
         } else {
             result.notImplemented();
@@ -84,7 +83,7 @@ public class CardScannerPlugin implements FlutterPlugin, MethodCallHandler, Acti
     void showCameraActivity(MethodCall call) {
         Map<String, String> map = (Map<String, String>) call.arguments;
         CardScanOptions cardScanOptions = new CardScanOptions(map);
-        Intent intent = new Intent(context, CardScannerCameraActivity.class);
+        Intent intent = new Intent(this.activity,CardScannerCameraActivity.class);
         intent.putExtra(CardScannerCameraActivity.CARD_SCAN_OPTIONS, cardScanOptions);
         activity.startActivityForResult(intent, SCAN_REQUEST_CODE);
     }
@@ -106,25 +105,6 @@ public class CardScannerPlugin implements FlutterPlugin, MethodCallHandler, Acti
             }
             return true;
         } else return false;
-    }
-
-    @Override
-    public void onAttachedToActivity(@NonNull ActivityPluginBinding binding) {
-        activity = binding.getActivity();
-        binding.addActivityResultListener(this);
-    }
-
-    @Override
-    public void onDetachedFromActivityForConfigChanges() {
-
-    }
-
-    @Override
-    public void onReattachedToActivityForConfigChanges(@NonNull ActivityPluginBinding binding) {
-    }
-
-    @Override
-    public void onDetachedFromActivity() {
     }
 }
 
